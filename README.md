@@ -10,8 +10,128 @@ Python-Markdown + WeasyPrint. Installed as the console commands
 md-to-pdf FILE.md [FILE.md ...]          # PDF written next to each .md
 md-to-pdf FILE.md -o /tmp/out.pdf        # explicit output (single input only)
 md-to-pdf FILE.md --keep-html            # also keep intermediate .html
+md-to-pdf --list-themes
 md-to-pdf --help
 ```
+
+## Themes
+
+Five print-optimised themes are built in. Every colour, font and metric is a
+token, so switching themes never changes the document structure — only the
+look.
+
+| Theme | Look |
+| --- | --- |
+| `classic` *(default)* | Corporate navy blue on a DejaVu Serif body |
+| `modern` | Sans-serif, indigo accent, light table headers |
+| `academic` | Times-like serif with navy accents — papers and specifications |
+| `minimal` | Grayscale, hairline rules, nothing decorative |
+| `github` | The familiar GitHub Markdown look, print-optimised |
+
+```bash
+md-to-pdf SPEC.md --theme modern
+md-to-pdf SPEC.md --css house-style.css        # repeatable; appended last
+md-to-pdf SPEC.md --page-size Letter --font-size 10
+md-to-pdf SPEC.md --footer "Acme Corp — Confidential"
+md-to-pdf SPEC.md --no-footer                  # no footer, no page numbers
+```
+
+`--css` is appended after the theme (and after the syntax-highlighting rules),
+so it is the right place for a house style or a one-off tweak.
+
+## Markdown support
+
+Everything useful for a printed document is enabled out of the box:
+
+| Feature | Extension |
+| --- | --- |
+| Tables (GFM pipe tables) | `extra` |
+| Fenced code + syntax highlighting | `extra` + `codehilite` (Pygments) |
+| Footnotes | `extra` |
+| Definition lists | `extra` |
+| Abbreviations (`*[HTML]: ...`) | `extra` |
+| Attribute lists (`{: .class #id }`) | `extra` |
+| Raw HTML, including `markdown="1"` | `extra` |
+| Table of contents (`[TOC]`) | `toc` |
+| Admonitions (`!!! note`) | `admonition` |
+| Smart quotes, dashes, ellipses | `smarty` |
+| Task lists (`- [x]`) and `~~strikethrough~~` | built into this tool |
+
+```bash
+md-to-pdf SPEC.md -x meta,wikilinks     # enable more extensions
+md-to-pdf SPEC.md -X smarty             # disable one of the defaults
+md-to-pdf SPEC.md --no-highlight        # plain code blocks
+md-to-pdf SPEC.md --highlight-style monokai
+```
+
+The `[TOC]` marker becomes a table of contents with **dot leaders and real page
+numbers** (WeasyPrint's `leader()` + `target-counter()`), abbreviations are
+expanded inline as `HTML (Hyper Text Markup Language)` because print has no
+hover, and task-list checkboxes become ballot boxes (`☐` / `☑`).
+
+### Nested lists
+
+Python-Markdown only nests a list item when it is indented by *four* spaces,
+while almost every other implementation — and almost every author — uses two or
+three. This tool rewrites list indentation to exactly `4 × depth` before
+parsing, so lists nest the way they are written:
+
+```markdown
+1. First item
+2. Second item
+   1. Nested ordered       ← two or three spaces both work
+      - Deep bullet
+        - Deeper still
+3. Third item
+```
+
+Indentation relative to an enclosing block is preserved, so lists keep their
+indentation inside blockquotes and `!!! admonition` blocks, and fenced code is
+never touched.
+
+### Code inside lists and blockquotes
+
+Python-Markdown's fenced-code extension only understands fences at the top
+level of a document: a fence indented under a list item, or written inside a
+blockquote, normally comes out as an inline code span — or escapes the list
+entirely. This tool renders those blocks on their own and puts them back, so
+they are real, highlighted code blocks in the right place:
+
+````markdown
+1. Install it:
+
+   ```bash
+   pip install md-to-pdf
+   ```
+
+2. Run it.
+````
+
+```markdown
+> ```python
+> print("also inside blockquotes")
+> ```
+```
+
+## Table column sizing
+
+Tables are measured and given a `<colgroup>` of content-aware widths, using the
+same min/max-content algorithm browsers apply to `table-layout: auto`:
+
+1. every column is measured in `em` — the widest *unbreakable token* (an
+   ID like `VD-HS-01`, a URL) is its hard minimum, the widest *natural line* is
+   the width at which nothing has to wrap;
+2. the printable width is shared out: when there is room to spare, every column
+   gets its preferred width and the leftover space is split equally (so no cell
+   ever wraps needlessly); when space is tight, columns start from their minimum
+   and share the remainder in proportion to `max − min`, which puts the space
+   where wrapping actually happens.
+
+Character widths are read from the **real font files** (via fontconfig and
+fontTools) rather than guessed, so the measurement matches what WeasyPrint
+renders. Two refinements come on top: all-numeric columns are right-aligned,
+and single-token columns (IDs, dates, `SN-000-12345`) are marked `nowrap` when
+they received enough width, so a value is never split across two lines.
 
 ## Math
 
@@ -92,6 +212,20 @@ env XDG_DATA_HOME=/home/wesjo/.local/share \
 The same prefix is needed for `pipx list`, `pipx uninstall md-to-pdf`, etc.
 A normal desktop terminal (outside the snap) needs none of this.
 
+## Development
+
+The test suite uses the standard library `unittest` runner and needs no extra
+dependencies, but it does import the module (so WeasyPrint must be importable):
+
+```bash
+# in the development venv / the pipx venv
+python -m unittest discover -s tests -v
+```
+
+It covers list indentation normalisation, the table column-sizing algorithm and
+its bounds handling, the extension setup, the theme token/CSS generation,
+title extraction and one end-to-end conversion through WeasyPrint.
+
 ## Uninstall
 
 ```bash
@@ -101,6 +235,12 @@ pipx uninstall md-to-pdf
 ## Dependencies
 
 Declared in `pyproject.toml` and installed into the same venv by pipx:
-`weasyprint>=62`, `markdown>=3.4`, `beautifulsoup4>=4.11`.
+`weasyprint>=62`, `markdown>=3.4`, `beautifulsoup4>=4.11`, `pygments>=2.10`.
+
+`pygments` is optional at runtime: without it fenced code blocks are still
+rendered, just without syntax colouring (`md-to-pdf --no-highlight` skips it
+deliberately). Table measurement uses `fontTools` (already a WeasyPrint
+dependency) and `fc-match` from fontconfig when they are available, and falls
+back to estimated character widths when they are not.
 
 [pipx]: https://pipx.pypa.io/
