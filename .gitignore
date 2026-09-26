@@ -1,0 +1,11 @@
+# setuptools build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+# generated output
+*.pdf
+*.html
+!README.html

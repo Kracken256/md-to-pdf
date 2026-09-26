@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "md-to-pdf"
+version = "1.1.0"
+description = "Robust Markdown -> HTML -> PDF pipeline (Python-Markdown + WeasyPrint + LaTeX math)."
+requires-python = ">=3.9"
+dependencies = [
+    "weasyprint>=62",
+    "markdown>=3.4",
+    "beautifulsoup4>=4.11",
+]
+
+[project.scripts]
+md-to-pdf = "md_to_pdf:main"
+md2pdf = "md_to_pdf:main"
+
+[tool.setuptools]
+py-modules = ["md_to_pdf"]
